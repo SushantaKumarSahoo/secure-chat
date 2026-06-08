@@ -1317,16 +1317,18 @@
         }
 
         async function displayMessages() {
+            const es = document.getElementById('emptyState');
+            const ch = document.getElementById('chatHeader');
             if (!currentFriend) {
-                document.getElementById('chatHeader').style.display = 'none';
-                document.getElementById('emptyState').style.display = 'block';
+                if (ch) ch.style.display = 'none';
+                if (es) es.style.display = 'block';
                 return;
             }
-            document.getElementById('chatHeader').style.display = 'flex';
-            document.getElementById('emptyState').style.display = 'none';
+            if (ch) ch.style.display = 'flex';
+            if (es) es.style.display = 'none';
             
             const messagesDiv = document.getElementById('messages');
-            messagesDiv.innerHTML = '';
+            messagesDiv.querySelectorAll('.message').forEach(el => el.remove());
             
             const friendMessages = messages[currentFriend] || [];
             
