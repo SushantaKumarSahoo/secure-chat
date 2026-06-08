@@ -225,7 +225,7 @@
         .btn:active, .test-btn:active, .connect-btn:active, .accept-btn:active, .decline-btn:active { transform: translateY(0); box-shadow: 0 4px 12px hsl(258 90% 20% / 0.15); }
         .btn { width: 100%; margin-bottom: 10px; }
 
-        .messages { flex: 1; padding: 16px; overflow: hidden; border-bottom: 1px solid var(--border-color); }
+        .messages { flex: 1; padding: 16px; overflow-y: auto; border-bottom: 1px solid var(--border-color); scroll-behavior: smooth; }
         .message { margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; max-width: 72%; position: relative; animation: messageSlide 0.25s ease; }
         @keyframes messageSlide { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
 .message.own { background: linear-gradient(135deg, hsl(258 90% 40% / 0.55), hsl(220 90% 40% / 0.45)); color: white; margin-left: auto; border-bottom-right-radius: 4px; border: 1px solid hsl(258 90% 66% / 0.2); box-shadow: 0 2px 12px hsl(258 90% 20% / 0.15); }
@@ -233,6 +233,12 @@
         .msg-header { font-size: 10px; opacity: 0.7; margin-bottom: 4px; letter-spacing: 0.2px; font-weight: 600; color: var(--muted); }
         .msg-content { word-wrap: break-word; font-size: 12px; line-height: 1.45; }
         .msg-content a { color: var(--accent-2); text-decoration: underline; text-underline-offset: 2px; }
+        .reply-bar { display: none; padding: 6px 12px; background: color-mix(in srgb, var(--accent), transparent 90%); border-bottom: 1px solid var(--border-color); font-size: 11px; align-items: center; gap: 8px; }
+        .reply-bar .reply-label { font-weight: 600; color: var(--accent); white-space: nowrap; }
+        .reply-bar .reply-preview { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+        .reply-bar .reply-close { cursor: pointer; opacity: 0.5; font-size: 14px; padding: 2px 6px; border-radius: 4px; }
+        .reply-bar .reply-close:hover { opacity: 1; background: color-mix(in srgb, var(--accent), transparent 80%); }
+        .message .reply-indicator { font-size: 10px; color: var(--accent); margin-bottom: 2px; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; background: color-mix(in srgb, var(--accent), transparent 90%); }
         .msg-content a:hover { filter: brightness(1.1); }
 .msg-content pre { position: relative; border: 1px solid var(--border-color); border-radius: 8px; overflow: auto; }
 .msg-content code { font-family: 'JetBrains Mono', 'Noto Sans Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; font-variant-ligatures: contextual; font-feature-settings: "calt" 1, "liga" 1; }
@@ -527,6 +533,12 @@
             <div id="messages" class="messages">
                 <div class="status" id="emptyState">Connect to server and select a friend to start secure chatting</div>
             </div>
+            <div id="replyBar" class="reply-bar">
+                <span class="reply-label">↩️ Replying to</span>
+                <span id="replyTarget" class="reply-label"></span>
+                <span id="replyPreview" class="reply-preview"></span>
+                <span class="reply-close" onclick="cancelReply()">✕</span>
+            </div>
             <div class="input-area">
                 <button class="emoji-btn" onclick="toggleEmojiPicker(event)" id="emojiBtn" title="Emoji">😊</button>
                 <textarea id="messageInput" class="msg-input" placeholder="Type your encrypted message..." rows="2"></textarea>
@@ -761,7 +773,13 @@
                     updateConnectionStatus('✓ Connected successfully!', 'success');
                     setStatusIndicator('online');
 
-                    // Re-register our public key on every connect to avoid stale server state
+                    // Try to resume previous session
+                    const savedId = localStorage.getItem(STORAGE_KEY);
+                    if (savedId) {
+                        sendToServer({ action: 'resume_session', user_id: savedId });
+                    }
+
+                    // Re-register public key
                     if (myPublicKeyArmored) {
                         sendToServer({ action: 'set_public_key', public_key: myPublicKeyArmored });
                     }
@@ -1186,17 +1204,43 @@
                     encryptionKeys: [friendPublicKey, publicKey]
                 });
                 
-                sendToServer({
+                const msgPayload = {
                     action: 'send_message',
                     target_id: currentFriend,
                     encrypted_message: encrypted
-                });
+                };
+                if (currentReply) {
+                    msgPayload.reply_to = { sender_id: currentReply.sender, timestamp: currentReply.timestamp };
+                }
+                sendToServer(msgPayload);
+                cancelReply();
                 
                 document.getElementById('messageInput').value = '';
                 
             } catch (error) {
                 showError('Encryption failed: ' + error.message);
             }
+        }
+
+        // Reply feature
+        let currentReply = null;
+
+        function setReply(msg, senderId) {
+            currentReply = { sender: senderId, timestamp: msg.timestamp };
+            const bar = document.getElementById('replyBar');
+            bar.style.display = 'flex';
+            document.getElementById('replyTarget').textContent = senderId === userId ? 'yourself' : senderId;
+            if (msg._decryptedText) {
+                document.getElementById('replyPreview').textContent = msg._decryptedText.substring(0, 60);
+            } else {
+                document.getElementById('replyPreview').textContent = '[Encrypted]';
+            }
+            document.getElementById('messageInput').focus();
+        }
+
+        function cancelReply() {
+            currentReply = null;
+            document.getElementById('replyBar').style.display = 'none';
         }
 
         function loadFriends() {
@@ -1357,6 +1401,14 @@
                 const time = new Date(msg.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 header.textContent = `${isOwn ? 'You' : msg.sender_id} · ${time}`;
                 
+                if (msg.reply_to) {
+                    const replyInd = document.createElement('div');
+                    replyInd.className = 'reply-indicator';
+                    replyInd.innerHTML = `↩️ ${msg.reply_to.sender_id === userId ? 'yourself' : msg.reply_to.sender_id}`;
+                    replyInd.title = 'View replied message';
+                    messageDiv.appendChild(replyInd);
+                }
+                
                 const content = document.createElement('div');
                 content.className = 'msg-content';
                 
@@ -1364,12 +1416,12 @@
                     try {
                         const message = await openpgp.readMessage({ armoredMessage: msg.encrypted_message });
                         
-                        // Decrypt the message using the stored private key (already decrypted)
                         const { data: decrypted } = await openpgp.decrypt({
                             message,
                             decryptionKeys: privateKey
                         });
                         
+                        msg._decryptedText = decrypted;
                         content.innerHTML = renderMessageHTML(decrypted);
                         enhanceMessageContent(content);
                     } catch (error) {
@@ -1386,6 +1438,12 @@
                 
                 messageDiv.appendChild(header);
                 messageDiv.appendChild(content);
+                messageDiv.style.cursor = 'pointer';
+                messageDiv.title = 'Double-click to reply';
+                messageDiv.addEventListener('dblclick', function(e) {
+                    if (msg.sender_id === userId) return;
+                    setReply(msg, msg.sender_id);
+                });
                 messagesDiv.appendChild(messageDiv);
             }
             
