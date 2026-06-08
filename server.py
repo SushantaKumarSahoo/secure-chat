@@ -149,16 +149,20 @@ class XsukaxChatServer:
             # Restore friends map
             friends_map = data.get('friends', {})
             self.friends = defaultdict(set, {uid: set(lst) for uid, lst in friends_map.items()})
-            logging.info(f"Loaded state: {len(self.user_data)} users, {len(self.friends)} friend lists")
+            # Restore messages
+            messages_map = data.get('messages', {})
+            self.messages = defaultdict(list, {cid: msgs for cid, msgs in messages_map.items()})
+            logging.info(f"Loaded state: {len(self.user_data)} users, {len(self.friends)} friend lists, {sum(len(v) for v in self.messages.values())} messages")
         except Exception as e:
             logging.error(f"Failed to load state: {e}")
 
     def save_state(self):
-        """Persist friends and public keys to disk."""
+        """Persist friends, public keys, and messages to disk."""
         try:
             data = {
                 'user_public_keys': {uid: info.get('public_key') for uid, info in self.user_data.items() if info.get('public_key')},
-                'friends': {uid: sorted(list(map(str, fset))) for uid, fset in self.friends.items() if fset}
+                'friends': {uid: sorted(list(map(str, fset))) for uid, fset in self.friends.items() if fset},
+                'messages': {cid: msgs for cid, msgs in self.messages.items() if msgs}
             }
             with open(self.state_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
@@ -411,6 +415,7 @@ class XsukaxChatServer:
             }
             
             self.messages[conversation_id].append(message_data)
+            self.save_state()
             
             # Send to both users
             notification = {
