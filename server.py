@@ -107,6 +107,10 @@ class XsukaxChatServer:
                             await self.handle_call_ice(user_id, data)
                         elif action == 'call_end':
                             await self.handle_call_end(user_id, data)
+                        elif action == 'typing':
+                            await self.handle_typing(user_id, data)
+                        elif action == 'typing_stop':
+                            await self.handle_typing_stop(user_id, data)
                         else:
                             await self.send_error(user_id, f"Unknown action: {action}")
                     except json.JSONDecodeError:
@@ -641,10 +645,11 @@ class XsukaxChatServer:
     async def handle_call_offer(self, sender_id, data):
         target_id = data.get('target_id')
         sdp = data.get('sdp')
+        has_video = data.get('hasVideo', True)
         if not target_id or not sdp:
             return await self.send_error(sender_id, "Missing target_id or sdp")
         if target_id in self.users:
-            await self.ws_send(target_id, {'type': 'call_offer', 'sender_id': sender_id, 'sdp': sdp})
+            await self.ws_send(target_id, {'type': 'call_offer', 'sender_id': sender_id, 'sdp': sdp, 'hasVideo': has_video})
         else:
             await self.send_error(sender_id, "Target user is offline")
 
@@ -670,6 +675,16 @@ class XsukaxChatServer:
             return
         if target_id in self.users:
             await self.ws_send(target_id, {'type': 'call_ended', 'sender_id': sender_id})
+
+    async def handle_typing(self, sender_id, data):
+        target_id = data.get('target_id')
+        if target_id and target_id in self.users:
+            await self.ws_send(target_id, {'type': 'friend_typing', 'sender_id': sender_id})
+
+    async def handle_typing_stop(self, sender_id, data):
+        target_id = data.get('target_id')
+        if target_id and target_id in self.users:
+            await self.ws_send(target_id, {'type': 'friend_typing_stop', 'sender_id': sender_id})
 
     async def cleanup_user(self, user_id):
         """Clean up user data when disconnecting"""

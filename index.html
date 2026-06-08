@@ -312,8 +312,10 @@
         .input-area { position: relative; }
         
         /* Video Calling */
-        .call-btn { background: none; border: 2px solid var(--border-color); border-radius: 6px; cursor: pointer; font-size: 14px; padding: 4px 10px; line-height: 1; transition: all 0.2s; flex-shrink: 0; }
+        .call-btn { background: none; border: 2px solid var(--border-color); border-radius: 6px; cursor: pointer; font-size: 14px; padding: 4px 10px; line-height: 1; transition: all 0.2s; flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; }
         .call-btn:hover { border-color: hsl(200 100% 60%); background: color-mix(in srgb, hsl(200 100% 60%), transparent 85%); }
+        .voice-btn { border-color: hsl(152 70% 45%); }
+        .voice-btn:hover { border-color: hsl(152 70% 45%); background: color-mix(in srgb, hsl(152 70% 45%), transparent 85%); }
         .call-btn:active { transform: scale(0.95); }
         .call-overlay { position: fixed; inset: 0; background: hsl(240 10% 6% / 0.92); backdrop-filter: blur(12px); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 6000; }
         .call-video-container { position: relative; width: min(90vw, 800px); height: min(70vh, 500px); background: hsl(240 10% 10%); border-radius: 14px; overflow: hidden; border: 2px solid var(--border-color); }
@@ -327,6 +329,10 @@
         .call-mute-btn { background: color-mix(in srgb, canvas, canvasText 10%); color: canvasText; border: 2px solid var(--border-color) !important; }
         .call-mute-btn:hover { border-color: var(--tree-focus-color); }
         .call-status-text { color: var(--muted); font-size: 13px; margin-bottom: 12px; text-align: center; }
+        .typing-indicator { font-size: 11px; color: var(--accent); font-style: italic; padding: 2px 16px 6px; animation: typingPulse 1.5s ease infinite; }
+        @keyframes typingPulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+        .share-btn { background: color-mix(in srgb, canvas, canvasText 8%); border: 2px solid var(--border-color) !important; }
+        .share-btn.active { border-color: hsl(200 100% 60%) !important; background: color-mix(in srgb, hsl(200 100% 60%), transparent 80%) !important; }
         .call-waiting { display: flex; flex-direction: column; align-items: center; gap: 8px; }
         .call-waiting .spinner { width: 32px; height: 32px; border: 3px solid var(--border-color); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -514,8 +520,10 @@
                 <span id="chatFriendStatus" class="friend-status offline" style="width:8px;height:8px;"></span>
                 <span id="chatFriendId" style="font-weight:700;font-size:13px;color:var(--text);font-family:'Space Grotesk',sans-serif;"></span>
                 <span id="chatFriendKeyStatus" style="font-size:10px;opacity:0.5;"></span>
-                <button class="call-btn" onclick="startVideoCall()" title="Start video call" style="margin-left:auto;">📹 Call</button>
+                <button class="call-btn voice-btn" onclick="startVoiceCall()" title="Voice call" style="margin-left:auto;">🎤 Voice</button>
+                <button class="call-btn" onclick="startVideoCall()" title="Video call">📹 Video</button>
             </div>
+            <div id="typingIndicator" class="typing-indicator" style="display:none;">typing...</div>
             <div id="messages" class="messages">
                 <div class="status" id="emptyState">Connect to server and select a friend to start secure chatting</div>
             </div>
@@ -585,6 +593,7 @@
         </div>
         <div class="call-controls">
             <button class="call-mute-btn" onclick="toggleMute()" id="muteBtn">🔊 Mute</button>
+            <button class="call-mute-btn share-btn" onclick="toggleScreenShare()" id="shareBtn">🖥️ Share</button>
             <button class="call-end-btn" onclick="endCall()">📞 End Call</button>
         </div>
     </div>
@@ -864,7 +873,7 @@
                     sendToServer({ action: 'call_end', target_id: data.sender_id });
                     return;
                 }
-                pendingCallOffer = { sdp: data.sdp, sender_id: data.sender_id };
+                pendingCallOffer = { sdp: data.sdp, sender_id: data.sender_id, hasVideo: data.hasVideo };
                 document.getElementById('callerId').textContent = data.sender_id;
                 document.getElementById('incomingCallModal').classList.add('show');
             } else if (type === 'call_answer') {
@@ -880,6 +889,12 @@
                 showError('Call ended by the other user');
                 document.getElementById('incomingCallModal').classList.remove('show');
                 endCall();
+            } else if (type === 'friend_typing') {
+                if (data.sender_id === currentFriend) {
+                    document.getElementById('typingIndicator').style.display = 'block';
+                }
+            } else if (type === 'friend_typing_stop') {
+                document.getElementById('typingIndicator').style.display = 'none';
             }
         }
 
@@ -1489,6 +1504,29 @@
                 sendMessage();
             }
         });
+
+        // Typing indicator
+        let typingTimer = null;
+        let isTyping = false;
+
+        document.getElementById('messageInput').addEventListener('input', function() {
+            if (!currentFriend) return;
+            const text = this.value.trim();
+            if (text && !isTyping) {
+                isTyping = true;
+                sendToServer({ action: 'typing', target_id: currentFriend });
+            } else if (!text && isTyping) {
+                stopTyping();
+            }
+            if (typingTimer) clearTimeout(typingTimer);
+            typingTimer = setTimeout(() => { if (isTyping) stopTyping(); }, 2000);
+        });
+
+        function stopTyping() {
+            if (!isTyping) return;
+            isTyping = false;
+            if (currentFriend) sendToServer({ action: 'typing_stop', target_id: currentFriend });
+        }
         
         // Initialize send button state
         updateSendBtnState();
@@ -1545,8 +1583,74 @@
         let callInProgress = false;
         let pendingCallOffer = null;
         let callMuted = false;
+        let screenSharing = false;
+        let screenStream = null;
+        let isVideoCall = false;
 
-        function startVideoCall() {
+        function getCallConfig() {
+            return { iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
+                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+            ]};
+        }
+
+        function setupPeerConnection() {
+            pc = new RTCPeerConnection(getCallConfig());
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+            pc.ontrack = function(event) {
+                if (event.streams[0]) {
+                    document.getElementById('remoteVideo').srcObject = event.streams[0];
+                    document.getElementById('callStatusText').textContent = 'Connected with ' + currentFriend;
+                }
+            };
+            pc.onicecandidate = function(event) {
+                if (event.candidate) {
+                    sendToServer({ action: 'call_ice_candidate', target_id: currentFriend, candidate: event.candidate });
+                }
+            };
+            pc.oniceconnectionstatechange = function() {
+                if (pc && callInProgress && (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed')) {
+                    document.getElementById('callStatusText').textContent = 'Call disconnected';
+                    setTimeout(endCall, 2000);
+                }
+            };
+        }
+
+        function startCall(withVideo) {
+            if (!currentFriend) return showError('No friend selected');
+            if (callInProgress) return showError('Call already in progress');
+            if (!friends.some(f => f.user_id === currentFriend)) return showError('Friend not found');
+            isVideoCall = withVideo;
+            
+            document.getElementById('callStatusText').textContent = 'Calling ' + currentFriend + '...';
+            document.getElementById('callOverlay').style.display = 'flex';
+            document.getElementById('remoteVideo').srcObject = null;
+            callInProgress = true;
+            
+            const constraints = { audio: true, video: withVideo };
+            navigator.mediaDevices.getUserMedia(constraints)
+                .then(stream => {
+                    localStream = stream;
+                    document.getElementById('localVideo').srcObject = stream;
+                    if (!withVideo) document.getElementById('localVideo').style.display = 'none';
+                    else document.getElementById('localVideo').style.display = 'block';
+                    
+                    setupPeerConnection();
+                    
+                    pc.createOffer().then(offer => pc.setLocalDescription(offer))
+                        .then(() => sendToServer({ action: 'call_offer', target_id: currentFriend, sdp: pc.localDescription, hasVideo: isVideoCall }))
+                        .catch(err => { showError('Call failed: ' + err.message); endCall(); });
+                })
+                .catch(err => { showError('Mic/camera access: ' + err.message); callInProgress = false; document.getElementById('callOverlay').style.display = 'none'; });
+        }
+
+        function startVoiceCall() { startCall(false); }
+        function startVideoCall() { startCall(true); }
             if (!currentFriend) return showError('No friend selected');
             if (callInProgress) return showError('Call already in progress');
             if (!friends.some(f => f.user_id === currentFriend)) return showError('Friend not found');
@@ -1595,7 +1699,7 @@
                     };
                     
                     pc.createOffer().then(offer => pc.setLocalDescription(offer))
-                        .then(() => sendToServer({ action: 'call_offer', target_id: currentFriend, sdp: pc.localDescription }))
+                        .then(() => sendToServer({ action: 'call_offer', target_id: currentFriend, sdp: pc.localDescription, hasVideo: isVideoCall }))
                         .catch(err => { showError('Offer failed: ' + err.message); endCall(); });
                 })
                 .catch(err => { showError('Camera/mic access: ' + err.message); callInProgress = false; document.getElementById('callOverlay').style.display = 'none'; });
@@ -1608,45 +1712,18 @@
             document.getElementById('incomingCallModal').classList.remove('show');
             document.getElementById('callStatusText').textContent = 'Connecting...';
             document.getElementById('callOverlay').style.display = 'flex';
+            isVideoCall = offer.hasVideo !== false;
             callInProgress = true;
 
-            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            const constraints = { audio: true, video: isVideoCall };
+            navigator.mediaDevices.getUserMedia(constraints)
                 .then(stream => {
                     localStream = stream;
                     document.getElementById('localVideo').srcObject = stream;
+                    if (!isVideoCall) document.getElementById('localVideo').style.display = 'none';
+                    else document.getElementById('localVideo').style.display = 'block';
                     
-                    const config = { iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' },
-                        { urls: 'stun:stun3.l.google.com:19302' },
-                        { urls: 'stun:stun4.l.google.com:19302' },
-                        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-                        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
-                    ]};
-                    pc = new RTCPeerConnection(config);
-                    
-                    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-                    
-                    pc.ontrack = function(event) {
-                        if (event.streams[0]) {
-                            document.getElementById('remoteVideo').srcObject = event.streams[0];
-                            document.getElementById('callStatusText').textContent = 'Connected with ' + currentFriend;
-                        }
-                    };
-                    
-                    pc.onicecandidate = function(event) {
-                        if (event.candidate) {
-                            sendToServer({ action: 'call_ice_candidate', target_id: currentFriend, candidate: event.candidate });
-                        }
-                    };
-                    
-                    pc.oniceconnectionstatechange = function() {
-                        if (pc && callInProgress && (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed')) {
-                            document.getElementById('callStatusText').textContent = 'Call disconnected';
-                            setTimeout(endCall, 2000);
-                        }
-                    };
+                    setupPeerConnection();
                     
                     pc.setRemoteDescription(new RTCSessionDescription(offer.sdp))
                         .then(() => pc.createAnswer())
@@ -1654,7 +1731,7 @@
                         .then(() => sendToServer({ action: 'call_answer', target_id: currentFriend, sdp: pc.localDescription }))
                         .catch(err => { showError('Answer failed: ' + err.message); endCall(); });
                 })
-                .catch(err => { showError('Camera/mic access: ' + err.message); endCall(); });
+                .catch(err => { showError('Mic/camera access: ' + err.message); endCall(); });
         }
 
         function declineCall() {
@@ -1670,6 +1747,8 @@
             callInProgress = false;
             if (pc) { try { pc.close(); } catch(e) {} pc = null; }
             if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+            if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+            screenSharing = false;
             remoteStream = null;
             document.getElementById('callOverlay').style.display = 'none';
             document.getElementById('remoteVideo').srcObject = null;
@@ -1682,6 +1761,50 @@
             callMuted = !callMuted;
             localStream.getAudioTracks().forEach(t => t.enabled = !callMuted);
             document.getElementById('muteBtn').textContent = callMuted ? '🔇 Unmute' : '🔊 Mute';
+        }
+
+        async function toggleScreenShare() {
+            if (!pc || !callInProgress) return;
+            const shareBtn = document.getElementById('shareBtn');
+            if (screenSharing) {
+                if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+                if (!isVideoCall) { screenSharing = false; shareBtn.classList.remove('active'); shareBtn.textContent = '🖥️ Share'; return; }
+                const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const newTrack = newStream.getVideoTracks()[0];
+                const oldTrack = localStream.getVideoTracks()[0];
+                if (oldTrack) { localStream.removeTrack(oldTrack); oldTrack.stop(); }
+                localStream.addTrack(newTrack);
+                const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender) sender.replaceTrack(newTrack);
+                document.getElementById('localVideo').srcObject = localStream;
+                screenSharing = false;
+                shareBtn.classList.remove('active');
+                shareBtn.textContent = '🖥️ Share';
+            } else {
+                try {
+                    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                    const screenTrack = screenStream.getVideoTracks()[0];
+                    if (isVideoCall) {
+                        const oldTrack = localStream.getVideoTracks()[0];
+                        if (oldTrack) { localStream.removeTrack(oldTrack); oldTrack.stop(); }
+                        localStream.addTrack(screenTrack);
+                        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (sender) sender.replaceTrack(screenTrack);
+                        document.getElementById('localVideo').srcObject = localStream;
+                    } else {
+                        localStream.addTrack(screenTrack);
+                        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (!sender) pc.addTrack(screenTrack, localStream);
+                        else sender.replaceTrack(screenTrack);
+                        document.getElementById('localVideo').style.display = 'block';
+                        document.getElementById('localVideo').srcObject = localStream;
+                    }
+                    screenSharing = true;
+                    shareBtn.classList.add('active');
+                    shareBtn.textContent = '🛑 Stop Share';
+                    screenTrack.onended = () => { if (screenSharing) toggleScreenShare(); };
+                } catch (e) { showError('Screen share cancelled'); }
+            }
         }
 
         // Auto-focus on passphrase input when modal opens
