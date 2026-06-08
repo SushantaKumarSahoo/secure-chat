@@ -131,6 +131,7 @@ class XsukaxChatServer:
         finally:
             if user_id:
                 await self.cleanup_user(user_id)
+        return websocket
                 
     def load_state(self):
         """Load persisted friends and public keys from disk."""
