@@ -876,6 +876,7 @@
                     pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => {});
                 }
             } else if (type === 'call_ended') {
+                if (!callInProgress) return;
                 showError('Call ended by the other user');
                 document.getElementById('incomingCallModal').classList.remove('show');
                 endCall();
@@ -1585,7 +1586,7 @@
                     };
                     
                     pc.oniceconnectionstatechange = function() {
-                        if (pc && (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed')) {
+                        if (pc && callInProgress && (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed')) {
                             document.getElementById('callStatusText').textContent = 'Call disconnected';
                             setTimeout(endCall, 2000);
                         }
@@ -1639,7 +1640,7 @@
                     };
                     
                     pc.oniceconnectionstatechange = function() {
-                        if (pc && (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed')) {
+                        if (pc && callInProgress && (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed')) {
                             document.getElementById('callStatusText').textContent = 'Call disconnected';
                             setTimeout(endCall, 2000);
                         }
@@ -1663,10 +1664,11 @@
         }
 
         function endCall() {
+            if (!callInProgress) return;
+            callInProgress = false;
             if (pc) { try { pc.close(); } catch(e) {} pc = null; }
             if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
             remoteStream = null;
-            callInProgress = false;
             document.getElementById('callOverlay').style.display = 'none';
             document.getElementById('remoteVideo').srcObject = null;
             document.getElementById('localVideo').srcObject = null;
