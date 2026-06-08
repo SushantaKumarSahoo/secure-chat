@@ -99,6 +99,14 @@ class XsukaxChatServer:
                             await self.get_messages(user_id, data)
                         elif action == 'get_key_status':
                             await self.get_key_status(user_id)
+                        elif action == 'call_offer':
+                            await self.handle_call_offer(user_id, data)
+                        elif action == 'call_answer':
+                            await self.handle_call_answer(user_id, data)
+                        elif action == 'call_ice_candidate':
+                            await self.handle_call_ice(user_id, data)
+                        elif action == 'call_end':
+                            await self.handle_call_end(user_id, data)
                         else:
                             await self.send_error(user_id, f"Unknown action: {action}")
                     except json.JSONDecodeError:
@@ -624,6 +632,39 @@ class XsukaxChatServer:
                 await ws.send_str(json.dumps(payload))
         except Exception as e:
             logging.error(f"Error sending to {user_id}: {e}")
+
+    async def handle_call_offer(self, sender_id, data):
+        target_id = data.get('target_id')
+        sdp = data.get('sdp')
+        if not target_id or not sdp:
+            return await self.send_error(sender_id, "Missing target_id or sdp")
+        if target_id in self.users:
+            await self.ws_send(target_id, {'type': 'call_offer', 'sender_id': sender_id, 'sdp': sdp})
+        else:
+            await self.send_error(sender_id, "Target user is offline")
+
+    async def handle_call_answer(self, sender_id, data):
+        target_id = data.get('target_id')
+        sdp = data.get('sdp')
+        if not target_id or not sdp:
+            return
+        if target_id in self.users:
+            await self.ws_send(target_id, {'type': 'call_answer', 'sender_id': sender_id, 'sdp': sdp})
+
+    async def handle_call_ice(self, sender_id, data):
+        target_id = data.get('target_id')
+        candidate = data.get('candidate')
+        if not target_id or not candidate:
+            return
+        if target_id in self.users:
+            await self.ws_send(target_id, {'type': 'call_ice_candidate', 'sender_id': sender_id, 'candidate': candidate})
+
+    async def handle_call_end(self, sender_id, data):
+        target_id = data.get('target_id')
+        if not target_id:
+            return
+        if target_id in self.users:
+            await self.ws_send(target_id, {'type': 'call_ended', 'sender_id': sender_id})
 
     async def cleanup_user(self, user_id):
         """Clean up user data when disconnecting"""

@@ -301,6 +301,35 @@
         .toast { pointer-events: auto; border-radius: 10px; padding: 10px 14px; border: 2px solid var(--border-color); background: color-mix(in srgb, canvas, canvasText 5%); color: canvasText; box-shadow: var(--shadow); backdrop-filter: blur(8px); animation: toastIn .25s ease both; }
         .toast-success { border-color: hsl(152 60% 40%); background: color-mix(in srgb, hsl(152 60% 35%), transparent 85%); color: light-dark(#0a0, #c7ffd6); }
         .toast-error { border-color: hsl(0 80% 50%); background: color-mix(in srgb, hsl(0 70% 35%), transparent 85%); color: light-dark(#700, #ffd1d1); }
+        
+        /* Emoji Picker */
+        .emoji-btn { background: none; border: 2px solid var(--border-color); border-radius: 6px; cursor: pointer; font-size: 18px; padding: 4px 8px; line-height: 1; transition: all 0.2s; flex-shrink: 0; }
+        .emoji-btn:hover { border-color: var(--tree-focus-color); background: color-mix(in srgb, var(--tree-focus-color), transparent 90%); }
+        .emoji-btn:active { transform: scale(0.95); }
+        .emoji-picker { position: absolute; bottom: 100%; left: 0; right: 0; background: hsl(240 10% 12% / 0.96); backdrop-filter: blur(16px); border: 2px solid var(--border-color); border-radius: 10px; padding: 8px; display: none; flex-wrap: wrap; gap: 2px; max-height: 200px; overflow-y: auto; z-index: 100; margin-bottom: 4px; }
+        .emoji-picker span { cursor: pointer; font-size: 22px; padding: 2px; border-radius: 4px; transition: background 0.15s; width: 34px; text-align: center; }
+        .emoji-picker span:hover { background: color-mix(in srgb, var(--tree-focus-color), transparent 80%); transform: scale(1.15); }
+        .input-area { position: relative; }
+        
+        /* Video Calling */
+        .call-btn { background: none; border: 2px solid var(--border-color); border-radius: 6px; cursor: pointer; font-size: 14px; padding: 4px 10px; line-height: 1; transition: all 0.2s; flex-shrink: 0; }
+        .call-btn:hover { border-color: hsl(200 100% 60%); background: color-mix(in srgb, hsl(200 100% 60%), transparent 85%); }
+        .call-btn:active { transform: scale(0.95); }
+        .call-overlay { position: fixed; inset: 0; background: hsl(240 10% 6% / 0.92); backdrop-filter: blur(12px); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 6000; }
+        .call-video-container { position: relative; width: min(90vw, 800px); height: min(70vh, 500px); background: hsl(240 10% 10%); border-radius: 14px; overflow: hidden; border: 2px solid var(--border-color); }
+        .call-video-container video { width: 100%; height: 100%; object-fit: cover; }
+        .call-video-container .local-video { position: absolute; bottom: 16px; right: 16px; width: 160px; height: 120px; border-radius: 10px; overflow: hidden; border: 2px solid var(--border-color); background: hsl(240 10% 8%); z-index: 10; }
+        .call-video-container .local-video video { width: 100%; height: 100%; object-fit: cover; }
+        .call-controls { display: flex; gap: 16px; margin-top: 16px; }
+        .call-controls button { border: none; cursor: pointer; font: inherit; font-weight: 600; font-size: 14px; padding: 10px 20px; border-radius: 8px; transition: all 0.2s; }
+        .call-end-btn { background: hsl(0 84% 60%); color: white; }
+        .call-end-btn:hover { background: hsl(0 84% 50%); transform: translateY(-1px); }
+        .call-mute-btn { background: color-mix(in srgb, canvas, canvasText 10%); color: canvasText; border: 2px solid var(--border-color) !important; }
+        .call-mute-btn:hover { border-color: var(--tree-focus-color); }
+        .call-status-text { color: var(--muted); font-size: 13px; margin-bottom: 12px; text-align: center; }
+        .call-waiting { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .call-waiting .spinner { width: 32px; height: 32px; border: 3px solid var(--border-color); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
         .toast-info { border-color: var(--border-color); }
         @keyframes toastIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes toastOut { to { opacity: 0; transform: translateY(6px) scale(.98); } }
@@ -481,17 +510,20 @@
         </div>
 
         <div class="chat-area">
-            <div id="chatHeader" class="chat-header" style="display:none; padding: 10px 16px; border-bottom: 1px solid var(--border-color); display: none; align-items: center; gap: 10px; background: color-mix(in srgb, canvas, transparent 70%);">
+            <div id="chatHeader" class="chat-header" style="display:none; padding: 10px 16px; border-bottom: 1px solid var(--border-color); align-items: center; gap: 10px; background: color-mix(in srgb, canvas, transparent 70%);">
                 <span id="chatFriendStatus" class="friend-status offline" style="width:8px;height:8px;"></span>
                 <span id="chatFriendId" style="font-weight:700;font-size:13px;color:var(--text);font-family:'Space Grotesk',sans-serif;"></span>
-                <span id="chatFriendKeyStatus" style="margin-left:auto;font-size:10px;opacity:0.5;"></span>
+                <span id="chatFriendKeyStatus" style="font-size:10px;opacity:0.5;"></span>
+                <button class="call-btn" onclick="startVideoCall()" title="Start video call" style="margin-left:auto;">📹 Call</button>
             </div>
             <div id="messages" class="messages">
                 <div class="status" id="emptyState">Connect to server and select a friend to start secure chatting</div>
             </div>
             <div class="input-area">
+                <button class="emoji-btn" onclick="toggleEmojiPicker(event)" id="emojiBtn" title="Emoji">😊</button>
                 <textarea id="messageInput" class="msg-input" placeholder="Type your encrypted message..." rows="2"></textarea>
                 <button class="send-btn" onclick="sendMessage()">🔒 Send</button>
+                <div id="emojiPicker" class="emoji-picker"></div>
             </div>
         </div>
     </div>
@@ -527,6 +559,33 @@
                 <button class="accept-btn" onclick="respondFriendRequest(true)">Accept</button>
                 <button class="decline-btn" onclick="respondFriendRequest(false)">Decline</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Incoming Call Modal -->
+    <div id="incomingCallModal" class="modal">
+        <div class="modal-content" style="max-width:380px;">
+            <h3>📹 Incoming Call</h3>
+            <p><span id="callerId" style="font-weight:700;color:var(--text);"></span> is calling you...</p>
+            <div class="modal-buttons">
+                <button class="accept-btn" onclick="answerCall()" style="background:linear-gradient(135deg,hsl(152 70% 45%),hsl(152 60% 38%));color:white;border:none;">📹 Accept</button>
+                <button class="decline-btn" onclick="declineCall()">Decline</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Video Call Overlay -->
+    <div id="callOverlay" class="call-overlay">
+        <div class="call-status-text" id="callStatusText">Connecting...</div>
+        <div class="call-video-container">
+            <video id="remoteVideo" autoplay playsinline></video>
+            <div class="local-video">
+                <video id="localVideo" autoplay playsinline muted></video>
+            </div>
+        </div>
+        <div class="call-controls">
+            <button class="call-mute-btn" onclick="toggleMute()" id="muteBtn">🔊 Mute</button>
+            <button class="call-end-btn" onclick="endCall()">📞 End Call</button>
         </div>
     </div>
 
@@ -799,8 +858,27 @@
             } else if (type === 'friend_request_sent') {
                 showSuccess('Friend request sent!');
                 document.getElementById('friendId').value = '';
-                // Optimistically refresh a few times waiting for acceptance
                 startFriendsRefresh(10000);
+            } else if (type === 'call_offer') {
+                if (callInProgress) {
+                    sendToServer({ action: 'call_end', target_id: data.sender_id });
+                    return;
+                }
+                pendingCallOffer = { sdp: data.sdp, sender_id: data.sender_id };
+                document.getElementById('callerId').textContent = data.sender_id;
+                document.getElementById('incomingCallModal').classList.add('show');
+            } else if (type === 'call_answer') {
+                if (pc && pc.remoteDescription === null) {
+                    pc.setRemoteDescription(new RTCSessionDescription(data.sdp)).catch(e => {});
+                }
+            } else if (type === 'call_ice_candidate') {
+                if (pc && pc.remoteDescription) {
+                    pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => {});
+                }
+            } else if (type === 'call_ended') {
+                showError('Call ended by the other user');
+                document.getElementById('incomingCallModal').classList.remove('show');
+                endCall();
             }
         }
 
@@ -1418,6 +1496,173 @@
                 continueWithPassphrase();
             }
         });
+
+        // === EMOJI PICKER ===
+        const EMOJIS = ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😊','😇','🥰','😍','🤩','😘','😗','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','😥','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐','😕','😟','🙁','😮','😯','😲','😳','🥺','😢','😭','😱','😖','😤','😡','😠','👍','👎','👌','✌️','🤞','🤟','🤘','🤙','👋','🤚','✋','👏','🙌','🤝','🙏','✍️','💪','❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','💕','💞','💓','💗','💖','💘','💝','💯','🔥','✨','⭐','🌟','💫','⚡','💥','🌈','🎉','🎊','🎈','🎁','🎀','🏆','🥇','🥈','🥉','🎮','🎯','🎲','🎨','📱','💻','📷','📹','🎥','📞','🔊','🔇','🔒','🔓','🔑','🔐','🔏','🛡️','💬','💭','🗨️','📧','📨','📩','📤','📥','📁','📎','🔗','💀','👻','🤖','🎃','😺','😸','😹','😻','😼','😽','🙀','😿','😾'];
+
+        function toggleEmojiPicker(event) {
+            event.stopPropagation();
+            const picker = document.getElementById('emojiPicker');
+            const visible = picker.style.display === 'flex';
+            picker.style.display = visible ? 'none' : 'flex';
+            if (!visible) buildEmojiPicker();
+        }
+
+        function buildEmojiPicker() {
+            const picker = document.getElementById('emojiPicker');
+            if (picker.children.length) return;
+            EMOJIS.forEach(e => {
+                const span = document.createElement('span');
+                span.textContent = e;
+                span.onclick = () => insertEmoji(e);
+                picker.appendChild(span);
+            });
+        }
+
+        function insertEmoji(emoji) {
+            const input = document.getElementById('messageInput');
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            input.value = input.value.substring(0, start) + emoji + input.value.substring(end);
+            input.selectionStart = input.selectionEnd = start + emoji.length;
+            input.focus();
+            document.getElementById('emojiPicker').style.display = 'none';
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#emojiBtn') && !e.target.closest('.emoji-picker')) {
+                document.getElementById('emojiPicker').style.display = 'none';
+            }
+        });
+
+        // === VIDEO CALLING ===
+        let pc = null;
+        let localStream = null;
+        let remoteStream = null;
+        let callInProgress = false;
+        let pendingCallOffer = null;
+        let callMuted = false;
+
+        function startVideoCall() {
+            if (!currentFriend) return showError('No friend selected');
+            if (callInProgress) return showError('Call already in progress');
+            if (!friends.some(f => f.user_id === currentFriend)) return showError('Friend not found');
+            
+            document.getElementById('callStatusText').textContent = 'Calling ' + currentFriend + '...';
+            document.getElementById('callOverlay').style.display = 'flex';
+            document.getElementById('remoteVideo').srcObject = null;
+            callInProgress = true;
+
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then(stream => {
+                    localStream = stream;
+                    document.getElementById('localVideo').srcObject = stream;
+                    
+                    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+                    pc = new RTCPeerConnection(config);
+                    
+                    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                    
+                    pc.ontrack = function(event) {
+                        if (event.streams[0]) {
+                            document.getElementById('remoteVideo').srcObject = event.streams[0];
+                            document.getElementById('callStatusText').textContent = 'Connected with ' + currentFriend;
+                        }
+                    };
+                    
+                    pc.onicecandidate = function(event) {
+                        if (event.candidate) {
+                            sendToServer({ action: 'call_ice_candidate', target_id: currentFriend, candidate: event.candidate });
+                        }
+                    };
+                    
+                    pc.oniceconnectionstatechange = function() {
+                        if (pc && (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed')) {
+                            document.getElementById('callStatusText').textContent = 'Call disconnected';
+                            setTimeout(endCall, 2000);
+                        }
+                    };
+                    
+                    pc.createOffer().then(offer => pc.setLocalDescription(offer))
+                        .then(() => sendToServer({ action: 'call_offer', target_id: currentFriend, sdp: pc.localDescription }))
+                        .catch(err => { showError('Offer failed: ' + err.message); endCall(); });
+                })
+                .catch(err => { showError('Camera/mic access: ' + err.message); callInProgress = false; document.getElementById('callOverlay').style.display = 'none'; });
+        }
+
+        function answerCall() {
+            if (!pendingCallOffer) return;
+            const offer = pendingCallOffer;
+            pendingCallOffer = null;
+            document.getElementById('incomingCallModal').classList.remove('show');
+            document.getElementById('callStatusText').textContent = 'Connecting...';
+            document.getElementById('callOverlay').style.display = 'flex';
+            callInProgress = true;
+
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then(stream => {
+                    localStream = stream;
+                    document.getElementById('localVideo').srcObject = stream;
+                    
+                    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+                    pc = new RTCPeerConnection(config);
+                    
+                    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                    
+                    pc.ontrack = function(event) {
+                        if (event.streams[0]) {
+                            document.getElementById('remoteVideo').srcObject = event.streams[0];
+                            document.getElementById('callStatusText').textContent = 'Connected with ' + currentFriend;
+                        }
+                    };
+                    
+                    pc.onicecandidate = function(event) {
+                        if (event.candidate) {
+                            sendToServer({ action: 'call_ice_candidate', target_id: currentFriend, candidate: event.candidate });
+                        }
+                    };
+                    
+                    pc.oniceconnectionstatechange = function() {
+                        if (pc && (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed')) {
+                            document.getElementById('callStatusText').textContent = 'Call disconnected';
+                            setTimeout(endCall, 2000);
+                        }
+                    };
+                    
+                    pc.setRemoteDescription(new RTCSessionDescription(offer))
+                        .then(() => pc.createAnswer())
+                        .then(answer => pc.setLocalDescription(answer))
+                        .then(() => sendToServer({ action: 'call_answer', target_id: currentFriend, sdp: pc.localDescription }))
+                        .catch(err => { showError('Answer failed: ' + err.message); endCall(); });
+                })
+                .catch(err => { showError('Camera/mic access: ' + err.message); endCall(); });
+        }
+
+        function declineCall() {
+            document.getElementById('incomingCallModal').classList.remove('show');
+            if (pendingCallOffer) {
+                sendToServer({ action: 'call_end', target_id: pendingCallOffer.sender_id || currentFriend });
+                pendingCallOffer = null;
+            }
+        }
+
+        function endCall() {
+            if (pc) { try { pc.close(); } catch(e) {} pc = null; }
+            if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+            remoteStream = null;
+            callInProgress = false;
+            document.getElementById('callOverlay').style.display = 'none';
+            document.getElementById('remoteVideo').srcObject = null;
+            document.getElementById('localVideo').srcObject = null;
+            if (currentFriend) sendToServer({ action: 'call_end', target_id: currentFriend });
+        }
+
+        function toggleMute() {
+            if (!localStream) return;
+            callMuted = !callMuted;
+            localStream.getAudioTracks().forEach(t => t.enabled = !callMuted);
+            document.getElementById('muteBtn').textContent = callMuted ? '🔇 Unmute' : '🔊 Mute';
+        }
 
         // Auto-focus on passphrase input when modal opens
         document.getElementById('passphraseModal').addEventListener('transitionend', function() {
