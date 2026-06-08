@@ -868,8 +868,8 @@
                 document.getElementById('callerId').textContent = data.sender_id;
                 document.getElementById('incomingCallModal').classList.add('show');
             } else if (type === 'call_answer') {
-                if (pc && pc.remoteDescription === null) {
-                    pc.setRemoteDescription(new RTCSessionDescription(data.sdp)).catch(e => {});
+                if (pc && pc.remoteDescription === null && data.sdp && data.sdp.type) {
+                    pc.setRemoteDescription(new RTCSessionDescription(data.sdp)).catch(e => console.error('setRemoteDescription error:', e));
                 }
             } else if (type === 'call_ice_candidate') {
                 if (pc && pc.remoteDescription) {
@@ -1645,7 +1645,7 @@
                         }
                     };
                     
-                    pc.setRemoteDescription(new RTCSessionDescription(offer))
+                    pc.setRemoteDescription(new RTCSessionDescription(offer.sdp))
                         .then(() => pc.createAnswer())
                         .then(answer => pc.setLocalDescription(answer))
                         .then(() => sendToServer({ action: 'call_answer', target_id: currentFriend, sdp: pc.localDescription }))
